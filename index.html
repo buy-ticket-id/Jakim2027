@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JIM 2027 - Email Sender</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101114;color:#f6f6f6;font-family:Arial,sans-serif;padding:24px}
+.wrap{max-width:760px;margin:0 auto;background:#1b1c20;border:1px solid #39332a;border-radius:16px;padding:26px}
+h1{color:#ffc247;margin:0 0 8px;font-size:24px}.muted{color:#b9b9b9;line-height:1.6;font-size:13px}
+label{display:block;margin:15px 0 6px;font-size:13px;color:#e8d3a0}
+input{width:100%;padding:12px;border-radius:8px;border:1px solid #484848;background:#111216;color:white}
+button{margin-top:20px;width:100%;padding:14px;border:0;border-radius:8px;background:#ffc247;color:#171717;font-weight:bold;font-size:15px}
+.timer{font-size:30px;font-weight:bold;color:#ffc247;margin:8px 0}.note{background:#28251e;border:1px solid #65512b;padding:12px;border-radius:8px;margin-top:18px;color:#e8d3a0;font-size:12px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>JIM 2027 — EmailJS Sender</h1>
+  <p class="muted">Konfigurasi EmailJS <b>sudah terpasang otomatis</b> (Service ID, Template ID, dan Public Key). Template email dibuat di dashboard EmailJS menggunakan file <b>email-template-final.html</b> sebagai isi HTML template — pada pengaturan template, isi kolom <b>To email</b> dengan variabel <b>{{to_email}}</b>.</p>
+  <form id="sendForm">
+    <label>EmailJS Public Key (terpasang)</label><input id="publicKey" required placeholder="YOUR_PUBLIC_KEY" value="425hoszuCsnQbbgRa">
+    <label>EmailJS Service ID (terpasang)</label><input id="serviceId" required placeholder="YOUR_SERVICE_ID" value="service_1z1yutm">
+    <label>EmailJS Template ID (terpasang)</label><input id="templateId" required placeholder="YOUR_TEMPLATE_ID" value="template_m51ohlr">
+    <label>Nama peserta</label><input id="toName" required placeholder="Nama lengkap">
+    <label>Email tujuan</label><input id="toEmail" type="email" required placeholder="email peserta">
+    <label>Nomor pesanan</label><input id="orderId" required placeholder="JIM2027-XXXX">
+    <label>Nominal pembayaran</label><input id="amount" required placeholder="Rp ...">
+    <label>URL gambar banner (opsional — default: aset resmi)</label><input id="bannerUrl" type="url" placeholder="https://domain-anda/banner1.jpg" value="https://raw.githubusercontent.com/event-id/event/main/assets/banner1.jpg">
+    <label>URL gambar QRIS (opsional — default: aset resmi)</label><input id="qrisUrl" type="url" placeholder="https://domain-anda/qris.png" value="https://raw.githubusercontent.com/event-id/event/main/assets/qris.png">
+    <label>Batas waktu pembayaran</label><input id="deadline" required placeholder="09 November 2026, 20.00 WIB">
+    <label>Nomor WhatsApp Customer Service</label><input id="waNumber" required placeholder="628xxxxxxxxxx">
+    <label>Link WhatsApp Customer Service (kosongkan untuk otomatis dari nomor)</label><input id="waUrl" type="url" placeholder="https://wa.me/628xxxxxxxxxx">
+    <div class="note"><b>Timer 3 menit:</b><div class="timer" id="timer">03:00</div>Timer ini hanya berjalan di halaman pengirim, bukan di dalam email penerima. Email menampilkan batas waktu yang Anda isi. Jangan gunakan batas waktu palsu atau memaksa pembayaran.</div>
+    <button type="submit" id="sendBtn">KIRIM EMAIL</button>
+  </form>
+  <p class="muted" id="result" role="status"></p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ===== KONFIGURASI EMAILJS (cadangan bila kolom dikosongkan) =====
+  const CONFIG = {
+    publicKey:  '425hoszuCsnQbbgRa',
+    serviceId:  'service_1z1yutm',
+    templateId: 'template_m51ohlr'
+  };
+
+  let seconds = 180;
+  const timer = () => {
+    const m = String(Math.floor(seconds/60)).padStart(2,'0');
+    const s = String(seconds%60).padStart(2,'0');
+    $('timer').textContent = `${m}:${s}`;
+    if (seconds > 0) seconds--;
+  };
+  timer();
+  setInterval(timer,1000);
+
+  // Petunjuk link WhatsApp otomatis mengikuti nomor yang diketik
+  $('waNumber').addEventListener('input', () => {
+    const wa = $('waNumber').value.replace(/[^\d]/g,'');
+    if (wa) $('waUrl').placeholder = `https://wa.me/${wa}`;
+  });
+
+  // Setelah berhasil, hanya data peserta yang dikosongkan (konfigurasi tetap tersimpan)
+  const resetDataFields = () => {
+    ['toName','toEmail','orderId','amount','deadline'].forEach(id => { $(id).value = ''; });
+  };
+
+  $('sendForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const btn = $('sendBtn'), result = $('result');
+    btn.disabled = true; btn.textContent = 'MENGIRIM...'; result.textContent = '';
+    try {
+      emailjs.init({ publicKey: $('publicKey').value.trim() || CONFIG.publicKey });
+      const wa = $('waNumber').value.trim().replace(/[^\d]/g,'');
+      const params = {
+        to_name: $('toName').value.trim(),
+        to_email: $('toEmail').value.trim(),
+        order_id: $('orderId').value.trim(),
+        amount: $('amount').value.trim(),
+        banner_image_url: $('bannerUrl').value.trim(),
+        qris_image_url: $('qrisUrl').value.trim(),
+        payment_deadline: $('deadline').value.trim(),
+        support_whatsapp: $('waNumber').value.trim(),
+        support_whatsapp_url: $('waUrl').value.trim() || `https://wa.me/${wa}`
+      };
+      const serviceId  = $('serviceId').value.trim()  || CONFIG.serviceId;
+      const templateId = $('templateId').value.trim() || CONFIG.templateId;
+      await emailjs.send(serviceId, templateId, params);
+      result.textContent = 'Email berhasil dikirim melalui EmailJS.';
+      resetDataFields();
+    } catch (error) {
+      console.error(error);
+      result.textContent = 'Email gagal dikirim. Periksa kembali Public Key, Service ID, Template ID, konfigurasi template, dan koneksi internet.';
+    } finally {
+      btn.disabled = false; btn.textContent = 'KIRIM EMAIL';
+    }
+  });
+})();
+</script>
+</body>
+</html>
